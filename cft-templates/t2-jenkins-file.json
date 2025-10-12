@@ -1,0 +1,118 @@
+pipeline {
+    agent any
+
+    environment {
+        PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+
+        AWS_ACCESS_KEY_ID     = credentials('aws-access-key-ids')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_REGION            = 'us-east-1'
+
+        Template2             = 't2-create-res-application.yaml'
+        Template_Name         = 'Stack-2'
+
+        EnvironmentName       = 'res-demo'
+        AdministratorEmail    = 'shankarex99@gmail.com'
+        SSHKeyPair            = 'RES_Key'
+        VpcId                 = 'vpc-0c69702c53d0bf5b2'
+        LoadBalancerSubnets   = 'subnet-0a81d5c52065a528b,subnet-0f20d09f14f3e7105' //Private Subnet
+        InfrastructureHostSubnets = 'subnet-0a81d5c52065a528b,subnet-0f20d09f14f3e7105' //Private Subnet
+        VdiSubnets            = 'subnet-0a81d5c52065a528b,subnet-0f20d09f14f3e7105' //Private Subnet
+        ActiveDirectoryName   = 'corp.res.com'
+        ADShortName           = 'corp'
+        LDAPBase              = 'DC=corp,DC=res,DC=com'
+        SudoersGroupName      = 'RESAdministrators'
+    }
+
+    stages {
+        stage('Check AWS Access') {
+            steps {
+                echo "Verifying AWS credentials..."
+                sh '''
+                    echo "Using AWS Access Key: ${AWS_ACCESS_KEY_ID}"
+                    which aws
+                    aws --version
+                    aws sts get-caller-identity --region ${AWS_REGION}
+                '''
+            }
+        }
+
+        stage('Check Git Access') {
+            steps {
+                echo "Verifying GitHub access..."
+                sh '''
+                    git --version
+                    git ls-remote ${GIT_REPO} ${GIT_BRANCH}
+                '''
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                echo "Pulling code from GitHub..."
+                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+            }
+        }
+
+        stage('Validate CloudFormation Templates') {
+            steps {
+                echo "Validating CloudFormation templates..."
+                sh "aws cloudformation validate-template --template-body file://${Template2}"
+            }
+        }
+
+        stage('Deploy CloudFormation Templates') {
+            steps {
+                dir("${CFT_DIR}") {
+                    echo "Deploying CloudFormation templates..."
+                    script {
+                        def t = "${Template2}"
+                        def stackName = "${Template_Name}"
+
+                        echo "Deploying stack: ${stackName}..."
+                        sh """
+                            aws cloudformation deploy \
+                              --template-file ${t} \
+                              --stack-name ${stackName} \
+                              --region ${AWS_REGION} \
+                              --capabilities CAPABILITY_NAMED_IAM \
+                              --parameter-overrides \
+                                EnvironmentName='${EnvironmentName}' \
+                                AdministratorEmail='${AdministratorEmail}' \
+                                SSHKeyPair='${SSHKeyPair}' \
+                                VpcId='${VpcId}' \
+                                LoadBalancerSubnets='${LoadBalancerSubnets}' \
+                                InfrastructureHostSubnets='${InfrastructureHostSubnets}' \
+                                VdiSubnets='${VdiSubnets}' \
+                                ActiveDirectoryName='${ActiveDirectoryName}' \
+                                ADShortName='${ADShortName}' \
+                                LDAPBase='${LDAPBase}' \
+                                SudoersGroupName='${SudoersGroupName}'
+                        """
+
+                        sh """
+                            aws cloudformation wait stack-create-complete \
+                              --stack-name ${stackName} \
+                              --region ${AWS_REGION}
+                        """
+
+                        echo "${stackName} deployment completed successfully."
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed. Check logs for details."
+        }
+        always {
+            echo "Cleaning workspace..."
+            cleanWs()
+        }
+    }
+}
