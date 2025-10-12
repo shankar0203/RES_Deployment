@@ -52,6 +52,7 @@ Parameters:
     Type: String
     MinLength: 0
     MaxLength: 2048
+    Default: A-Rlso@0099
     AllowedPattern: ^$|(arn:(aws(-cn|-us-gov)?):secretsmanager:(us(-gov)?|ap|ca|cn|eu|il|sa|me)-(central|(north|south)?(east|west)?)-\d:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+)|(?=^.{8,64}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9\s])(?=.*[a-z])|(?=.*[^A-Za-z0-9\s])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]))^.*
     NoEcho: true
   ServiceAccountPassword:
@@ -59,6 +60,7 @@ Parameters:
     Type: String
     MinLength: 0
     MaxLength: 2048
+    Default: S-Rlso@0099
     AllowedPattern: ^$|(arn:(aws(-cn|-us-gov)?):secretsmanager:(us(-gov)?|ap|ca|cn|eu|il|sa|me)-(central|(north|south)?(east|west)?)-\d:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+)|(?=^.{8,64}$)((?=.*\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[^A-Za-z0-9\s])(?=.*[a-z])|(?=.*[^A-Za-z0-9\s])(?=.*[A-Z])(?=.*[a-z])|(?=.*\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]))^.*
     NoEcho: true
   LDIFS3Path:
@@ -77,6 +79,7 @@ Parameters:
     Type: String
     MinLength: 0
     MaxLength: 2048
+    Default: RES_Key
   ClientIpCidr:
     Description: (Optional) CIDR controlling incoming traffic to AD management instances.
     Default: ""

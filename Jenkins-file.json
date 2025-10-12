@@ -1,0 +1,144 @@
+pipeline {
+    agent any
+
+    environment {
+        // ✅ Explicit binary paths so Jenkins can find AWS CLI & Terraform
+        PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+
+        // ✅ AWS credentials stored in Jenkins Credentials Plugin
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-ids')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_REGION = 'us-east-1'
+
+        // ✅ Directories
+        TF_DIR = '.'
+        CFT_DIR = 'cft-templates'
+
+        // ✅ Git repo details
+        GIT_REPO = 'https://github.com/shankar0203/RES_Deployment.git'
+        GIT_BRANCH = 'main'
+    }
+
+    stages {
+
+        stage('Check AWS Access') {
+            steps {
+                echo "Verifying AWS credentials..."
+                sh '''
+                    echo "Using AWS Access Key: ${AWS_ACCESS_KEY_ID}"
+                    echo "Checking AWS CLI path..."
+                    which aws
+                    aws --version
+                    aws sts get-caller-identity --region ${AWS_REGION}
+                '''
+            }
+        }
+
+        stage('Check Git Access') {
+            steps {
+                echo "Verifying GitHub access..."
+                sh '''
+                    git --version
+                    git ls-remote ${GIT_REPO} ${GIT_BRANCH}
+                '''
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                echo "Pulling code from GitHub..."
+                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${TF_DIR}") {
+                    echo "Initializing Terraform..."
+                    sh '''
+                        echo "Checking Terraform path..."
+                        which terraform
+                        terraform --version
+                        terraform init -input=false
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${TF_DIR}") {
+                    echo "Running Terraform plan..."
+                    sh 'terraform plan -out=tfplan -input=false'
+                }
+            }
+        }
+
+        // 💤 Commented for now (run later)
+        // stage('Terraform Apply') {
+        //     steps {
+        //         dir("${TF_DIR}") {
+        //             echo "Applying Terraform..."
+        //             sh 'terraform apply -input=false -auto-approve tfplan'
+        //         }
+        //     }
+        // }
+
+        stage('Validate CloudFormation Templates') {
+            steps {
+                dir("${CFT_DIR}") {
+                    echo "Validating CloudFormation templates..."
+                    script {
+                        def templates = ['t1-create-external-resources.yaml'] // Add more if needed
+                        for (t in templates) {
+                            echo "Validating template ${t}..."
+                            sh "aws cloudformation validate-template --template-body file://${t}"
+                        }
+                    }
+                }
+            }
+        }
+
+        // 💤 Commented for now (run later)
+        // stage('Deploy CloudFormation Templates') {
+        //     steps {
+        //         dir("${CFT_DIR}") {
+        //             echo "Deploying CloudFormation templates..."
+        //             script {
+        //                 def templates = ['t1-create-external-resources.yaml']
+        //                 for (t in templates) {
+        //                     def stackName = t.replace('.yaml', '') + '-stack'
+        //                     echo "Deploying ${stackName}..."
+        //                     sh """
+        //                         aws cloudformation deploy \
+        //                         --template-file ${t} \
+        //                         --stack-name ${stackName} \
+        //                         --capabilities CAPABILITY_NAMED_IAM \
+        //                         --region ${AWS_REGION}
+        //                     """
+        //                     sh """
+        //                         aws cloudformation wait stack-create-complete \
+        //                         --stack-name ${stackName} \
+        //                         --region ${AWS_REGION}
+        //                     """
+        //                     echo "${stackName} deployment completed successfully."
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline completed successfully."
+        }
+        failure {
+            echo "❌ Pipeline failed. Check the logs for errors."
+        }
+        always {
+            echo "Cleaning workspace..."
+            cleanWs()
+        }
+    }
+}
